@@ -22,7 +22,6 @@ namespace Smartsheet.Api.Internal
 	using System.ComponentModel;
 	using System.Threading;
 	using NLog;
-	using RestSharp;
 	using Api.Internal.Json;
 	using DefaultHttpClient = Api.Internal.Http.DefaultHttpClient;
 	using HttpClient = Api.Internal.Http.HttpClient;
@@ -358,7 +357,7 @@ namespace Smartsheet.Api.Internal
 			Utils.ThrowIfEmpty(baseURI);
 
 			this.baseURI = new Uri(baseURI);
-			this.httpClient = httpClient == null ? new DefaultHttpClient(new RestClient(), SmartsheetShouldRetry) : httpClient;
+			this.httpClient = httpClient == null ? new DefaultHttpClient(SmartsheetShouldRetry) : httpClient;
 			this.jsonSerializer = jsonSerializer == null ? new JsonNetSerializer() : jsonSerializer;
 			this.accessToken = accessToken;
 		}

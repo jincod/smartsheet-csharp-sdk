@@ -88,6 +88,14 @@ namespace Smartsheet.Api.Internal.Http
 		{
 		}
 
+		/// <summary>
+		/// Constructor.
+		/// </summary>
+		public DefaultHttpClient(ShouldRetryCallback shouldRetryCallback)
+			: this(new RestClient(), shouldRetryCallback)
+		{
+		}
+
         /// <summary>
         /// Constructor.
         /// 
