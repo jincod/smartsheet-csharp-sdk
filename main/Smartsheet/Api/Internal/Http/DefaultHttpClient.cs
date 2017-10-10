@@ -154,8 +154,7 @@ namespace Smartsheet.Api.Internal.Http
 	            throw new NotSupportedException("Request method " + smartsheetRequest.Method + " is not supported!");
 	        }
 
-	        var request = new HttpRequestMessage(mapping[smartsheetRequest.Method],
-	            smartsheetRequest.Uri.GetLeftPart(UriPartial.Authority));
+	        var request = new HttpRequestMessage(mapping[smartsheetRequest.Method], smartsheetRequest.Uri);
 
 	        if (smartsheetRequest.Entity?.GetContent() != null)
 	        {
@@ -284,7 +283,7 @@ namespace Smartsheet.Api.Internal.Http
 				thisVersion = assembly.GetName().Version.ToString();
 				title = assembly.GetName().Name;
 			}
-			return "smartsheet-csharp-sdk("+title + ")/" + thisVersion + " " + Util.GetOSFriendlyName();
+			return Uri.EscapeDataString($"smartsheet-csharp-sdk({title})/{thisVersion}");
 		}
 
 		/// <summary>
