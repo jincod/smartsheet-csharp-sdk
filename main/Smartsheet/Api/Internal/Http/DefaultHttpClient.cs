@@ -16,14 +16,13 @@
 //    limitations under the License.
 //    %[license]
 
-using System.Collections.Generic;
-using Smartsheet.Api.Internal;
-using Smartsheet.Api.Internal.Http;
+using System.Net.Http;
+using System.Net.Http.Headers;
 
 namespace Smartsheet.Api.Internal.Http
 {
-	using Util = Api.Internal.Utility.Utility;
-	using RestSharp;
+    using System.Collections.Generic;
+    using Util = Api.Internal.Utility.Utility;
 	using System;
 	using System.IO;
 	using System.Net;
@@ -31,7 +30,6 @@ namespace Smartsheet.Api.Internal.Http
 	using System.Reflection;
 	using System.Diagnostics;
 	using System.Text;
-	using System.Threading;
 	using NLog;
 
 	/// <summary>
@@ -48,15 +46,7 @@ namespace Smartsheet.Api.Internal.Http
 		/// 
 		/// It will be initialized in constructor and will not change afterwards.
 		/// </summary>
-		private readonly RestClient httpClient;
-
-		/// <summary>
-		/// The http request. </summary>
-		private RestRequest restRequest;
-
-		/// <summary>
-		/// The http response. </summary>
-		private IRestResponse restResponse;
+        private readonly System.Net.Http.HttpClient _httpClient;
 
 		/// <summary>
 		/// static logger 
@@ -84,7 +74,7 @@ namespace Smartsheet.Api.Internal.Http
 		/// Constructor.
 		/// </summary>
 		public DefaultHttpClient()
-			: this(new RestClient(), DefaultShouldRetry)
+			: this(new System.Net.Http.HttpClient(), DefaultShouldRetry)
 		{
 		}
 
@@ -92,7 +82,7 @@ namespace Smartsheet.Api.Internal.Http
 		/// Constructor.
 		/// </summary>
 		public DefaultHttpClient(ShouldRetryCallback shouldRetryCallback)
-			: this(new RestClient(), shouldRetryCallback)
+			: this(new System.Net.Http.HttpClient(), shouldRetryCallback)
 		{
 		}
 
@@ -105,13 +95,12 @@ namespace Smartsheet.Api.Internal.Http
         /// </summary>
         /// <param name="httpClient"> the http client </param>
         /// <param name="shouldRetryCallback">User-supplied retry implementation</param>
-        public DefaultHttpClient(RestClient httpClient, ShouldRetryCallback shouldRetryCallback)
+        public DefaultHttpClient(System.Net.Http.HttpClient httpClient, ShouldRetryCallback shouldRetryCallback)
 		{
 			Util.ThrowIfNull(httpClient);
 
-			this.httpClient = httpClient;
-			this.httpClient.FollowRedirects = true;
-			this.httpClient.UserAgent = buildUserAgent();
+            _httpClient = new System.Net.Http.HttpClient();
+		    _httpClient.DefaultRequestHeaders.Add("User-Agent", buildUserAgent());
 
 			this.shouldRetryCallback = shouldRetryCallback;
 		}
@@ -130,85 +119,104 @@ namespace Smartsheet.Api.Internal.Http
 			Util.ThrowIfNull(smartsheetRequest);
 			if (smartsheetRequest.Uri == null)
 			{
-				throw new System.ArgumentException("A Request URI is required.");
+				throw new ArgumentException("A Request URI is required.");
 			}
 
-			HttpResponse smartsheetResponse = new HttpResponse();
+			var request = CreateRequest(smartsheetRequest);
 
-			// Create HTTP request based on the smartsheetRequest request Type
-			if (HttpMethod.GET == smartsheetRequest.Method)
-			{
-				restRequest = new RestRequest(smartsheetRequest.Uri, Method.GET);
-			}
-			else if (HttpMethod.POST == smartsheetRequest.Method)
-			{
-				restRequest = new RestRequest(smartsheetRequest.Uri, Method.POST);
-			}
-			else if (HttpMethod.PUT == smartsheetRequest.Method)
-			{
-				restRequest = new RestRequest(smartsheetRequest.Uri, Method.PUT);
-			}
-			else if (HttpMethod.DELETE == smartsheetRequest.Method)
-			{
-				restRequest = new RestRequest(smartsheetRequest.Uri, Method.DELETE);
-			}
-			else
-			{
-				throw new System.NotSupportedException("Request method " + smartsheetRequest.Method + " is not supported!");
-			}
+		    var byteArrayContent = new ByteArrayContent(File.ReadAllBytes(file));
+		    byteArrayContent.Headers.ContentType = MediaTypeHeaderValue.Parse(fileType);
 
-			// Set HTTP Headers
-			if (smartsheetRequest.Headers != null)
-			{
-				foreach (KeyValuePair<string, string> header in smartsheetRequest.Headers)
-				{
-					restRequest.AddHeader(header.Key, header.Value);
-				}
-			}
+		    var content = new MultipartFormDataContent
+		    {
+		        request.Content,
+		        {byteArrayContent, "\"file\"", $"\"{new FileInfo(file).Name}\""}
+		    };
 
-			restRequest.AddFile("file", File.ReadAllBytes(file), new FileInfo(file).Name, fileType);
-			if (smartsheetRequest.Entity != null && smartsheetRequest.Entity.GetContent() != null)
-			{
-				restRequest.AddParameter(objectType.ToLower(), System.Text.Encoding.Default.GetString(smartsheetRequest.Entity.Content),
-					ParameterType.RequestBody);
-			}
-
-			restRequest.AlwaysMultipartFormData = true;
-
-			// Set the client base Url.
-			httpClient.BaseUrl = new Uri(smartsheetRequest.Uri.GetLeftPart(UriPartial.Authority));
-
-			// Make the HTTP request
-			restResponse = httpClient.Execute(restRequest);
-
-			if (restResponse.ResponseStatus == ResponseStatus.Error)
-			{
-				throw new HttpClientException("There was an issue connecting.");
-			}
-
-			// Set returned Headers
-			smartsheetResponse.Headers = new Dictionary<string, string>();
-			foreach (var header in restResponse.Headers)
-			{
-				smartsheetResponse.Headers[header.Name] = (String)header.Value;
-			}
-			smartsheetResponse.StatusCode = restResponse.StatusCode;
-
-			// Set returned entities
-			if (restResponse.Content != null)
-			{
-				HttpEntity entity = new HttpEntity();
-				entity.ContentType = restResponse.ContentType;
-				entity.ContentLength = restResponse.ContentLength;
-
-				entity.Content = restResponse.RawBytes;
-				smartsheetResponse.Entity = entity;
-			}
-
-			return smartsheetResponse;
+		    request.Content = content;
+            
+			return CreateSmartsheetResponse(request);
 		}
 
-		/// <summary>
+	    // Create HTTP request based on the smartsheetRequest request Type
+	    private static HttpRequestMessage CreateRequest(HttpRequest smartsheetRequest)
+	    {
+	        var mapping = new Dictionary<HttpMethod?, System.Net.Http.HttpMethod>
+	        {
+	            {HttpMethod.GET, System.Net.Http.HttpMethod.Get},
+	            {HttpMethod.POST, System.Net.Http.HttpMethod.Post},
+	            {HttpMethod.PUT, System.Net.Http.HttpMethod.Put},
+	            {HttpMethod.DELETE, System.Net.Http.HttpMethod.Delete}
+	        };
+
+	        if (!mapping.ContainsKey(smartsheetRequest.Method))
+	        {
+	            throw new NotSupportedException("Request method " + smartsheetRequest.Method + " is not supported!");
+	        }
+
+	        var request = new HttpRequestMessage(mapping[smartsheetRequest.Method],
+	            smartsheetRequest.Uri.GetLeftPart(UriPartial.Authority));
+
+	        if (smartsheetRequest.Entity?.GetContent() != null)
+	        {
+	            request.Headers.Add("Accept", "application/json");
+	            request.Content = new StringContent(
+	                Encoding.Default.GetString(smartsheetRequest.Entity.Content),
+	                Encoding.UTF8,
+	                "application/json"
+	            );
+	        }
+
+            // Set HTTP Headers
+            if (smartsheetRequest.Headers != null)
+	        {
+	            foreach (var header in smartsheetRequest.Headers)
+	            {
+	                request.Headers.Add(header.Key, header.Value);
+	            }
+	        }
+
+	        return request;
+	    }
+
+	    private HttpResponse CreateSmartsheetResponse(HttpRequestMessage restRequest)
+	    {
+	        // Set the client base Url.
+            //httpClient.BaseUrl = httpClientBaseUrl;
+
+	        Stopwatch timer = new Stopwatch();
+	        timer.Start();
+
+            // Make the HTTP request
+	        var restResponse = _httpClient.SendAsync(restRequest).Result;
+
+            timer.Stop();
+
+	        LogRequest(restRequest, restResponse, timer.ElapsedMilliseconds);
+
+	        restResponse.EnsureSuccessStatusCode();
+           
+	        HttpResponse smartsheetResponse = new HttpResponse
+	        {
+	            Headers = restResponse.Headers.ToDictionary(x => x.Key, x => string.Join(",", x.Value)),
+	            StatusCode = restResponse.StatusCode
+	        };
+
+	        // Set returned entities
+	        if (restResponse.Content != null)
+	        {
+	            smartsheetResponse.Entity = new HttpEntity
+	            {
+	                ContentType = restResponse.Content.Headers.ContentType.MediaType,
+	                ContentLength = restResponse.Content.Headers.ContentLength.Value,
+	                Content = restResponse.Content.ReadAsByteArrayAsync().Result
+	            };
+	        }
+
+	        return smartsheetResponse;
+	    }
+
+	    /// <summary>
 		/// Make an HTTP request and return the response.
 		/// </summary>
 		/// <param name="smartsheetRequest"> the Smartsheet request </param>
@@ -217,95 +225,26 @@ namespace Smartsheet.Api.Internal.Http
 		public virtual HttpResponse Request(HttpRequest smartsheetRequest)
 		{
 			Util.ThrowIfNull(smartsheetRequest);
-			if (smartsheetRequest.Uri == null)
+
+            if (smartsheetRequest.Uri == null)
 			{
-				 throw new System.ArgumentException("A Request URI is required.");
+				 throw new ArgumentException("A Request URI is required.");
 			}
 
 			int attempt = 0;
-			HttpResponse smartsheetResponse = null;
+			HttpResponse smartsheetResponse;
 
 			Stopwatch totalElapsed = new Stopwatch();
 			totalElapsed.Start();
 
 			while (true)
 			{
-				smartsheetResponse = new HttpResponse();
+                // TODO move up
+			    var restRequest = CreateRequest(smartsheetRequest);
+                
+			    smartsheetResponse = CreateSmartsheetResponse(restRequest);
 
-				// Create HTTP request based on the smartsheetRequest request Type
-				if (HttpMethod.GET == smartsheetRequest.Method)
-				{
-					restRequest = new RestRequest(smartsheetRequest.Uri, Method.GET);
-				}
-				else if (HttpMethod.POST == smartsheetRequest.Method)
-				{
-					restRequest = new RestRequest(smartsheetRequest.Uri, Method.POST);
-				}
-				else if (HttpMethod.PUT == smartsheetRequest.Method)
-				{
-					restRequest = new RestRequest(smartsheetRequest.Uri, Method.PUT);
-				}
-				else if (HttpMethod.DELETE == smartsheetRequest.Method)
-				{
-					restRequest = new RestRequest(smartsheetRequest.Uri, Method.DELETE);
-				}
-				else
-				{
-					throw new System.NotSupportedException("Request method " + smartsheetRequest.Method + " is not supported!");
-				}
-
-				// Set HTTP Headers
-				if (smartsheetRequest.Headers != null)
-				{
-					foreach (KeyValuePair<string, string> header in smartsheetRequest.Headers)
-					{
-						restRequest.AddHeader(header.Key, header.Value);
-					}
-				}
-
-				if (smartsheetRequest.Entity != null && smartsheetRequest.Entity.GetContent() != null)
-				{
-					restRequest.AddParameter("application/json", Util.ReadAllBytes(smartsheetRequest.Entity.GetBinaryContent()),
-						ParameterType.RequestBody);
-				}
-
-				// Set the client base Url.
-				httpClient.BaseUrl = new Uri(smartsheetRequest.Uri.GetLeftPart(UriPartial.Authority));
-
-				Stopwatch timer = new Stopwatch();
-
-				// Make the HTTP request
-				timer.Start();
-				restResponse = httpClient.Execute(restRequest);
-				timer.Stop();
-
-				LogRequest(restRequest, restResponse, timer.ElapsedMilliseconds);
-
-				if (restResponse.ResponseStatus == ResponseStatus.Error)
-				{
-					throw new HttpClientException("There was an issue connecting.");
-				}
-
-				// Set returned Headers
-				smartsheetResponse.Headers = new Dictionary<string, string>();
-				foreach (var header in restResponse.Headers)
-				{
-					smartsheetResponse.Headers[header.Name] = (String)header.Value;
-				}
-				smartsheetResponse.StatusCode = restResponse.StatusCode;
-
-				// Set returned entities
-				if (restResponse.Content != null)
-				{
-					HttpEntity entity = new HttpEntity();
-					entity.ContentType = restResponse.ContentType;
-					entity.ContentLength = restResponse.ContentLength;
-
-					entity.Content = restResponse.RawBytes;
-					smartsheetResponse.Entity = entity;
-				}
-
-				if (smartsheetResponse.StatusCode == HttpStatusCode.OK)
+                if (smartsheetResponse.StatusCode == HttpStatusCode.OK)
 				{
 					break;
 				}
@@ -354,39 +293,48 @@ namespace Smartsheet.Api.Internal.Http
 		/// <param name="request"></param>
 		/// <param name="response"></param>
 		/// <param name="durationMs"></param>
-        private void LogRequest(IRestRequest request, IRestResponse response, long durationMs)
+        private void LogRequest(HttpRequestMessage request, HttpResponseMessage response, long durationMs)
         {
-			logger.Info(() =>
-			{
-				return string.Format("{0} {1}, Response Code:{2}, Request completed in {3} ms", 
-					request.Method.ToString(), httpClient.BuildUri(request), response.StatusCode, durationMs);
-			});
+			logger.Info(() => string.Format("{0} {1}, Response Code:{2}, Request completed in {3} ms", 
+			    request.Method.ToString(), request.RequestUri.ToString(), response.StatusCode, durationMs));
             logger.Debug(() =>
             {
-				var headers_list = request.Parameters.Where(parameter => parameter.Type == ParameterType.HttpHeader).ToList();
-				StringBuilder builder = new StringBuilder();
-				foreach(RestSharp.Parameter header in headers_list)
+                StringBuilder builder = new StringBuilder();
+
+                foreach (var header in request.Headers)
 				{
-					if(header.Name == "Authorization")
-					{
-						builder.Append("\"" + header.Name + "\"").Append(":").Append("\"[Redacted]\" ");
-					}
-					else
-						builder.Append("\"" + header.Name + "\"").Append(":").Append("\"" + header.Value + "\" ");
+				    if (header.Key == "Authorization")
+				    {
+				        builder
+                            .Append("\"" + header.Key + "\"")
+                            .Append(":")
+                            .Append("\"[Redacted]\" ");
+				    }
+				    else
+				    {
+				        builder
+                            .Append("\"" + header.Key + "\"")
+                            .Append(":")
+                            .Append("\"" + header.Value + "\" ");
+				    }
 				}
-				string body = "N/A";
-				var body_element = request.Parameters.Where(parameter => parameter.Type == ParameterType.RequestBody).ToList();
-				if(body_element.Count() > 0)
-					body = System.Text.Encoding.UTF8.GetString((byte[])body_element[0].Value);
-				return string.Format("Request Headers {0}Request Body: {1}", builder.ToString(), body);
+
+                string body = request.Content.ReadAsStringAsync().Result ?? "N/A";
+                
+                return string.Format("Request Headers {0} Request Body: {1}", builder.ToString(), body);
 			});
 			logger.Debug(() =>
 			{
-				StringBuilder builder = new StringBuilder();
-				foreach(RestSharp.Parameter header in response.Headers)
+				var builder = new StringBuilder();
+
+                foreach (var header in response.Headers)
 				{
-					builder.Append("\"" + header.Name + "\"").Append(":").Append("\"" + header.Value + "\" ");
+					builder
+                        .Append("\"" + header.Key + "\"")
+                        .Append(":")
+                        .Append("\"" + header.Value + "\" ");
 				}
+
                 return string.Format("Response Headers: {0}Response Body: {1}", builder.ToString(), response.Content.ToString());
             });
         }

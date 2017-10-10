@@ -13,10 +13,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="RestSharp" Version="105.2.3" />
     <PackageReference Include="Newtonsoft.Json" Version="10.0.3" />
     <PackageReference Include="NLog" Version="5.0.0-beta10" />
-    <PackageReference Include="NLog.Config" Version="4.4.10" />
-    <PackageReference Include="NLog.Schema" Version="4.4.10" />
+    <PackageReference Include="NLog.Config" Version="4.5.0-alpha04" />
+    <PackageReference Include="NLog.Schema" Version="4.5.0-alpha04" />
   </ItemGroup>
 </Project>
