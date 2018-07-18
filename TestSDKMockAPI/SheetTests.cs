@@ -1,11 +1,8 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Smartsheet.Api;
 using Smartsheet.Api.Models;
-using Smartsheet.Api.Internal.Http;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using RestSharp;
 
 namespace TestSDKMockAPI
 {
