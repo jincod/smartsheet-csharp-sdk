@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -104,12 +103,12 @@ namespace Smartsheet.Api.Internal.Util
                         {
                             result.Append("&");
                         }
-                        result.Append(HttpUtility.UrlEncode(entry.Key, Encoding.UTF8));
+						result.Append(Uri.EscapeDataString(entry.Key));
                         result.Append("=");
 
                         if (entry.Value != null)
                         {
-                            result.Append(HttpUtility.UrlEncode(entry.Value, Encoding.UTF8));
+							result.Append(Uri.EscapeDataString(entry.Value));
                         }
                     }
                 }

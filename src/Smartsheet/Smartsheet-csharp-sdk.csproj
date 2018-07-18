@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup>
+   <PackageId>smartsheet-csharp-sdk</PackageId>
+   <PackageVersion>3.0.0-alpha</PackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\main\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RestSharp" Version="105.2.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="10.0.3" />
+    <PackageReference Include="NLog" Version="5.0.0-beta10" />
+    <PackageReference Include="NLog.Config" Version="4.4.10" />
+    <PackageReference Include="NLog.Schema" Version="4.4.10" />
+  </ItemGroup>
+</Project>

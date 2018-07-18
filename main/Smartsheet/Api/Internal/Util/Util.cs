@@ -16,9 +16,7 @@
 //    limitations under the License.
 //    %[license]
 
-using System;
 using System.IO;
-using System.Management;
 
 namespace Smartsheet.Api.Internal.Utility
 {
@@ -30,38 +28,7 @@ namespace Smartsheet.Api.Internal.Utility
 
         public static string GetOSFriendlyName()
         {
-            string result = string.Empty;
-            ManagementObjectCollection.ManagementObjectEnumerator enumerator = null;
-
-            try
-            {
-                enumerator = (
-                        new ManagementObjectSearcher("SELECT Caption FROM Win32_OperatingSystem")
-                    ).Get()
-                    .GetEnumerator();
-
-                if (enumerator.MoveNext())
-                {
-                    result = ((ManagementObject)enumerator.Current)["Caption"].ToString();
-                }
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Hosted solution - Many not allow access to WMI
-                return "Hosted";
-            }
-            catch (System.NotImplementedException)
-            {
-                return ".Net Core-" + System.Environment.OSVersion.VersionString;
-            }
-            finally
-            {
-                if (enumerator != null)
-                {
-                    ((IDisposable)enumerator).Dispose();
-                }
-            }
-            return result;
+		    return System.Runtime.InteropServices.RuntimeInformation.OSDescription;
         }
 
         /**
